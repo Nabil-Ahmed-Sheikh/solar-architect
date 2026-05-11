@@ -32,10 +32,11 @@ class SiteAnalysisViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def add_shade_profile(self, request, pk=None):
         site = self.get_object()
-        data = [{'site': site.id, **item} for item in request.data]
-        serializer = ShadeProfileSerializer(data=data, many=True)
+        serializer = ShadeProfileSerializer(data=list(request.data), many=True)
         serializer.is_valid(raise_exception=True)
-        # Delete existing and replace
         site.shade_profiles.all().delete()
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        ShadeProfile.objects.bulk_create([
+            ShadeProfile(site=site, **attrs)
+            for attrs in serializer.validated_data
+        ])
+        return Response(ShadeProfileSerializer(site.shade_profiles.all(), many=True).data, status=status.HTTP_201_CREATED)
