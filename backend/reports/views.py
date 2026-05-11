@@ -26,11 +26,13 @@ class EnergyReportViewSet(viewsets.ModelViewSet):
         """Bulk create/replace monthly generation data for this report."""
         report = self.get_object()
         report.monthly_data.all().delete()
-        data = [{'report': report.id, **item} for item in request.data]
-        serializer = MonthlyGenerationSerializer(data=data, many=True)
+        serializer = MonthlyGenerationSerializer(data=list(request.data), many=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        instances = MonthlyGeneration.objects.bulk_create([
+            MonthlyGeneration(report=report, **attrs)
+            for attrs in serializer.validated_data
+        ])
+        return Response(MonthlyGenerationSerializer(instances, many=True).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'])
     def summary(self, request):

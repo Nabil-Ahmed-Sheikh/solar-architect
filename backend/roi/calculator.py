@@ -4,7 +4,6 @@ ROI Calculator Engine
 25-year NPV / IRR / LCOE / payback model for solar installations.
 """
 import math
-import numpy as np
 
 
 class ROICalculator:
@@ -36,11 +35,12 @@ class ROICalculator:
         else:
             annual_payment = 0
 
-        # Delete existing projections
-        YearlyProjection.objects.filter(analysis=a).delete()
+        is_persisted = hasattr(a, 'pk') and a.pk is not None
+        if is_persisted:
+            YearlyProjection.objects.filter(analysis=a).delete()
 
         projections = []
-        cumulative = 0
+        cumulative = -net_cost    # Start with the initial investment as negative
         payback_year = None
         cashflows = [-net_cost]   # Year 0 investment
         total_gen = 0
@@ -72,8 +72,7 @@ class ROICalculator:
                 frac = abs(prev_cum) / net_savings if net_savings != 0 else 0
                 payback_year = yr - 1 + frac
 
-            projections.append(YearlyProjection(
-                analysis=a,
+            row_data = dict(
                 year=yr,
                 utility_cost_usd=round(util_cost, 2),
                 solar_payout_usd=round(solar_payout, 2),
@@ -81,9 +80,16 @@ class ROICalculator:
                 cumulative_savings_usd=round(cumulative, 2),
                 generation_kwh=round(gen_kwh, 1),
                 utility_rate_kwh=round(util_rate, 4),
-            ))
+            )
+            if is_persisted:
+                projections.append(YearlyProjection(analysis=a, **row_data))
+            else:
+                projections.append(type('Projection', (), row_data)())
 
-        YearlyProjection.objects.bulk_create(projections)
+        if is_persisted:
+            YearlyProjection.objects.bulk_create(projections)
+        else:
+            a.yearly_projections = projections
 
         # IRR (Newton-Raphson)
         a.irr_pct = round(self._irr(cashflows) * 100, 2)
@@ -96,7 +102,7 @@ class ROICalculator:
 
         # Lifetime savings
         a.lifetime_savings_usd = round(cumulative, 2)
-        a.payback_years = round(payback_year or self.ANALYSIS_YEARS, 1)
+        a.payback_years = round(payback_year if payback_year is not None else self.ANALYSIS_YEARS, 1)
 
         # Lifetime utility spend (no solar)
         lifetime_util = sum(
@@ -106,7 +112,8 @@ class ROICalculator:
         a.lifetime_utility_cost_usd = round(lifetime_util, 2)
         a.lifetime_solar_cost_usd = round(net_cost + annual_payment * a.loan_term_years + a.annual_om_cost_usd * self.ANALYSIS_YEARS, 2)
 
-        a.save()
+        if is_persisted:
+            a.save()
 
     @staticmethod
     def _npv(cashflows, rate):
