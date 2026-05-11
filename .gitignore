@@ -1,0 +1,46 @@
+# ── Environment & secrets ──────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# ── Python / Django ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+env/
+*.sqlite3
+db.sqlite3
+
+# Django media & static collected files
+backend/staticfiles/
+backend/media/
+backend/lidar_data/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# ── Node / Next.js ─────────────────────────────────────────────────────────
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+
+# ── OS & editors ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
