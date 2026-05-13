@@ -12,7 +12,7 @@ class EnergyReportViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = super().get_queryset().filter(project__owner=self.request.user)
         project_id = self.request.query_params.get('project')
         year = self.request.query_params.get('year')
         if project_id:
@@ -24,6 +24,8 @@ class EnergyReportViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def add_monthly_data(self, request, pk=None):
         """Bulk create/replace monthly generation data for this report."""
+        if not isinstance(request.data, list):
+            return Response({'error': 'Expected a JSON array'}, status=status.HTTP_400_BAD_REQUEST)
         report = self.get_object()
         report.monthly_data.all().delete()
         serializer = MonthlyGenerationSerializer(data=list(request.data), many=True)

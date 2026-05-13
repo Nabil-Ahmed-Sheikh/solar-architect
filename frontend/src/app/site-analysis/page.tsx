@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import GoogleMapView from "@/components/maps/GoogleMapView";
@@ -36,20 +36,32 @@ function SiteAnalysisContent() {
   const [saved, setSaved] = useState(false);
   const [lidarScan, setLidarScan] = useState<LiDARScan | null>(null);
   const [lidarLoading, setLidarLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    lidarApi.googleMapsKey().then((r) => setMapsKey(r.data.key)).catch(() => {});
+    return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); };
+  }, []);
+
+  useEffect(() => {
+    lidarApi.googleMapsKey().catch(() => {});
     if (!projectId) return;
-    projectsApi.get(Number(projectId)).then((r) => setProject(r.data)).catch(() => {});
+    projectsApi.get(Number(projectId)).then((r) => setProject(r.data)).catch(() => {
+      setLoadError("Failed to load project.");
+    });
     sitesApi.list(Number(projectId)).then((r) => {
       if (r.data.results.length > 0) {
         const s = r.data.results[0];
         setSite(s); setSiteId(s.id); setStep(s.current_step || 1);
       }
-    }).catch(() => {});
+    }).catch(() => {
+      setLoadError("Failed to load site data.");
+    });
     lidarApi.list(Number(projectId)).then((r) => {
       if (r.data.results.length > 0) setLidarScan(r.data.results[0]);
-    }).catch(() => {});
+    }).catch(() => {
+      setLoadError("Failed to load LiDAR data.");
+    });
   }, [projectId]);
 
   const handleLocationSelect = (lat: number, lng: number, address: string) => {
@@ -75,6 +87,7 @@ function SiteAnalysisContent() {
   const triggerLiDAR = async () => {
     if (!projectId || !site.latitude || !site.longitude) return;
     setLidarLoading(true);
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     try {
       const res = await lidarApi.create({
         project: Number(projectId),
@@ -83,13 +96,19 @@ function SiteAnalysisContent() {
         source: "alberta_open",
       });
       setLidarScan(res.data);
-      // Poll status
-      const poll = setInterval(async () => {
-        const status = await lidarApi.pollStatus(res.data.id);
-        if (status.data.status === "complete" || status.data.status === "failed") {
-          clearInterval(poll);
-          const full = await lidarApi.get(res.data.id);
-          setLidarScan(full.data);
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const statusRes = await lidarApi.pollStatus(res.data.id);
+          if (statusRes.data.status === "complete" || statusRes.data.status === "failed") {
+            clearInterval(pollIntervalRef.current!);
+            pollIntervalRef.current = null;
+            const full = await lidarApi.get(res.data.id);
+            setLidarScan(full.data);
+            setLidarLoading(false);
+          }
+        } catch {
+          clearInterval(pollIntervalRef.current!);
+          pollIntervalRef.current = null;
           setLidarLoading(false);
         }
       }, 3000);
@@ -101,6 +120,11 @@ function SiteAnalysisContent() {
 
   return (
     <AppShell>
+      {loadError && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-[#ba1a1a]/10 border border-[#ba1a1a]/20 text-sm text-[#ba1a1a]">
+          {loadError}
+        </div>
+      )}
       {/* Step progress */}
       <div className="flex items-center gap-4 mb-8 flex-wrap">
         {STEPS.map((s, i) => (

@@ -68,6 +68,7 @@ export default function ROICalculatorPage() {
   });
   const [loanTerm, setLoanTerm] = useState<15 | 20 | 25>(20);
   const [loading, setLoading] = useState(false);
+  const [calcError, setCalcError] = useState<string | null>(null);
 
   const set = (field: keyof Params) => (v: number) => {
     const next = { ...params, [field]: v };
@@ -77,6 +78,7 @@ export default function ROICalculatorPage() {
 
   const recalculate = useCallback(async (p: Params) => {
     setLoading(true);
+    setCalcError(null);
     try {
       const res = await roiApi.quickEstimate({ ...p, loan_term_years: loanTerm });
       setResults({
@@ -90,7 +92,9 @@ export default function ROICalculatorPage() {
         lifetime_solar_cost_usd: res.data.lifetime_solar_cost_usd,
       });
       if (res.data.yearly_projections?.length) setProjections(res.data.yearly_projections);
-    } catch { /* keep mock */ }
+    } catch {
+      setCalcError("Calculation failed — figures shown may be outdated.");
+    }
     setLoading(false);
   }, [loanTerm]);
 
@@ -106,6 +110,11 @@ export default function ROICalculatorPage() {
 
   return (
     <AppShell>
+      {calcError && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-[#ba1a1a]/10 border border-[#ba1a1a]/20 text-sm text-[#ba1a1a]">
+          {calcError}
+        </div>
+      )}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="font-headline font-bold text-2xl text-[#191c1d]">ROI Calculator</h1>
