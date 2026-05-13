@@ -11,6 +11,7 @@ class ROIAnalysisViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = ROIAnalysis.objects.select_related('project').prefetch_related('yearly_projections')
+        qs = qs.filter(project__owner=self.request.user)
         project_id = self.request.query_params.get('project')
         if project_id:
             qs = qs.filter(project_id=project_id)

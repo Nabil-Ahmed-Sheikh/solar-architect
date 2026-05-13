@@ -36,6 +36,18 @@ class ROICalculator:
             annual_payment = 0
 
         is_persisted = hasattr(a, 'pk') and a.pk is not None
+
+        # Determine baseline consumption for "utility cost without solar" calculation.
+        # Use the site's annual_consumption_kwh if available; fall back to production.
+        baseline_kwh = a.annual_production_kwh
+        if is_persisted:
+            try:
+                site = a.project.site_analysis
+                if site.annual_consumption_kwh:
+                    baseline_kwh = site.annual_consumption_kwh
+            except AttributeError:
+                pass
+
         if is_persisted:
             YearlyProjection.objects.filter(analysis=a).delete()
 
@@ -54,8 +66,8 @@ class ROICalculator:
             # Utility rate with inflation
             util_rate = a.current_utility_rate_kwh * ((1 + a.utility_inflation_rate_pct / 100) ** (yr - 1))
 
-            # Utility cost without solar
-            util_cost = gen_kwh * util_rate
+            # Utility cost without solar (based on consumption, not degraded generation)
+            util_cost = baseline_kwh * util_rate
 
             # Solar system cost this year
             solar_payout = annual_payment + a.annual_om_cost_usd

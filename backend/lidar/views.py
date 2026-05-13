@@ -42,6 +42,7 @@ class LiDARScanViewSet(viewsets.ModelViewSet):
         qs = LiDARScan.objects.select_related('project').prefetch_related(
             'dsm_tile', 'roof_segments', 'obstacles'
         )
+        qs = qs.filter(project__owner=self.request.user)
         project_id = self.request.query_params.get('project')
         if project_id:
             qs = qs.filter(project_id=project_id)
@@ -110,7 +111,7 @@ class LiDARScanViewSet(viewsets.ModelViewSet):
                 t.daemon = True
                 t.start()
         except Exception as e:
-            return Response({'error': str(e)}, status=500)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({'status': 'reprocessing', 'id': scan.id})
 
@@ -142,11 +143,10 @@ class LiDARScanViewSet(viewsets.ModelViewSet):
                 'elevation_min': scan.elevation_min,
                 'elevation_max': scan.elevation_max,
             })
-        except Exception:
-            return Response({'error': 'DSM not yet generated'}, status=404)
+        except AttributeError:
+            return Response({'error': 'DSM not yet generated'}, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=['get'])
     def google_maps_key(self, request):
-        """Return the Google Maps API key for the frontend."""
-        key = settings.GOOGLE_MAPS_API_KEY
-        return Response({'key': key, 'available': bool(key)})
+        """Return whether a Google Maps API key is configured (key is server-side only)."""
+        return Response({'available': bool(settings.GOOGLE_MAPS_API_KEY)})

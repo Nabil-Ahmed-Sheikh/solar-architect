@@ -13,7 +13,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = super().get_queryset().filter(owner=self.request.user)
         status_filter = self.request.query_params.get('status')
         search = self.request.query_params.get('search')
         if status_filter:
@@ -29,21 +29,20 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
-        """Return aggregated dashboard stats."""
-        total_projects = Project.objects.count()
-        active = Project.objects.filter(status='ACTIVE').count()
-        total_generation = Project.objects.aggregate(
-            total=Sum('estimated_generation')
-        )['total'] or 0
-        total_area = Project.objects.aggregate(
-            total=Sum('roof_area')
-        )['total'] or 0
-        by_status = list(
-            Project.objects.values('status').annotate(count=Count('id'))
+        """Return aggregated dashboard stats for the current user's projects."""
+        qs = Project.objects.filter(owner=request.user)
+        aggs = qs.aggregate(
+            total_projects=Count('id'),
+            active=Count('id', filter=Q(status='ACTIVE')),
+            total_generation=Sum('estimated_generation'),
+            total_area=Sum('roof_area'),
         )
+        by_status = list(qs.values('status').annotate(count=Count('id')))
+        total_generation = aggs['total_generation'] or 0
+        total_area = aggs['total_area'] or 0
         return Response({
-            'total_projects': total_projects,
-            'active_installations': active,
+            'total_projects': aggs['total_projects'],
+            'active_installations': aggs['active'],
             'total_estimated_generation_mwh': round(total_generation, 2),
             'total_estimated_generation_gwh': round(total_generation / 1000, 3),
             'total_roof_area_m2': round(total_area, 2),
@@ -54,6 +53,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 class GlobalMetricsViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = GlobalMetrics.objects.all()
     serializer_class = GlobalMetricsSerializer
+    permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=['get'])
     def latest(self, request):

@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_BASE as API } from "@/lib/config";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,11 +92,26 @@ export const register = createAsyncThunk(
 export const refreshAccessToken = createAsyncThunk(
   "auth/refresh",
   async (_, { getState, rejectWithValue }) => {
-    const { auth } = getState() as { auth: AuthState };
-    if (!auth.refreshToken) return rejectWithValue("No refresh token");
+    // Prefer localStorage — the Axios interceptor writes rotated tokens there immediately,
+    // while Redux state may lag behind by one async dispatch cycle.
+    let refreshToken: string | null = null;
+    if (typeof window !== "undefined") {
+      try {
+        const persisted = localStorage.getItem("persist:solararchitect:auth");
+        if (persisted) {
+          const parsed = JSON.parse(persisted);
+          refreshToken = JSON.parse(parsed.refreshToken ?? "null");
+        }
+      } catch { /* ignore parse errors */ }
+    }
+    if (!refreshToken) {
+      const { auth } = getState() as { auth: AuthState };
+      refreshToken = auth.refreshToken;
+    }
+    if (!refreshToken) return rejectWithValue("No refresh token");
     try {
-      const res = await axios.post(`${API}/api/auth/token/refresh/`, { refresh: auth.refreshToken });
-      return { access: res.data.access, refresh: res.data.refresh ?? auth.refreshToken };
+      const res = await axios.post(`${API}/api/auth/token/refresh/`, { refresh: refreshToken });
+      return { access: res.data.access, refresh: res.data.refresh ?? refreshToken };
     } catch {
       return rejectWithValue("Session expired");
     }

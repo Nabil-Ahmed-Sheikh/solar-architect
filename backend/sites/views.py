@@ -12,7 +12,7 @@ class SiteAnalysisViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = super().get_queryset().filter(project__owner=self.request.user)
         project_id = self.request.query_params.get('project')
         if project_id:
             qs = qs.filter(project_id=project_id)
@@ -22,15 +22,22 @@ class SiteAnalysisViewSet(viewsets.ModelViewSet):
     def advance_step(self, request, pk=None):
         """Advance the wizard step and save step data."""
         site = self.get_object()
-        step = request.data.get('step')
-        if step and int(step) > site.current_step:
-            site.current_step = int(step)
+        try:
+            step = int(request.data.get('step'))
+        except (TypeError, ValueError):
+            return Response({'error': 'step must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+        if not 1 <= step <= 3:
+            return Response({'error': 'step must be 1, 2, or 3'}, status=status.HTTP_400_BAD_REQUEST)
+        if step > site.current_step:
+            site.current_step = step
             site.save(update_fields=['current_step', 'updated_at'])
         serializer = self.get_serializer(site)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def add_shade_profile(self, request, pk=None):
+        if not isinstance(request.data, list):
+            return Response({'error': 'Expected a JSON array'}, status=status.HTTP_400_BAD_REQUEST)
         site = self.get_object()
         serializer = ShadeProfileSerializer(data=list(request.data), many=True)
         serializer.is_valid(raise_exception=True)

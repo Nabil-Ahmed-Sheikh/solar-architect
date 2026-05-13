@@ -227,8 +227,9 @@ class LiDARGoogleMapsKeyTests(APITestCase):
     def test_returns_key_shape(self):
         res = self.client.get(self.url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertIn("key", res.data)
         self.assertIn("available", res.data)
+        # Key is server-side only — must not be exposed in the response
+        self.assertNotIn("key", res.data)
 
     def test_unauthenticated_blocked(self):
         self.client.force_authenticate(user=None)
