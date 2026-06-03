@@ -43,8 +43,12 @@ function SiteAnalysisContent() {
     return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); };
   }, []);
 
+  // Read Maps key from env var — never from the backend API (security)
   useEffect(() => {
-    lidarApi.googleMapsKey().catch(() => {});
+    setMapsKey(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "");
+  }, []);
+
+  useEffect(() => {
     if (!projectId) return;
     projectsApi.get(Number(projectId)).then((r) => setProject(r.data)).catch(() => {
       setLoadError("Failed to load project.");

@@ -102,6 +102,11 @@ class PanelSpecTests(APITestCase):
         res = self.client.get(self.url)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_unauthenticated_blocked(self):
+        self.client.force_authenticate(user=None)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
 
 class InverterSpecTests(APITestCase):
     url = "/api/configurations/inverters/"
@@ -209,3 +214,29 @@ class SystemConfigurationTests(APITestCase):
         self.client.force_authenticate(user=None)
         res = self.client.get(self.url)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class SystemConfigIsolationTests(APITestCase):
+    """User A cannot see or modify User B's system configurations."""
+
+    def setUp(self):
+        self.user_a = make_user(username="cfg_a", email="cfg_a@example.com")
+        self.user_b = make_user(username="cfg_b", email="cfg_b@example.com")
+        self.project_a = make_project(owner=self.user_a)
+        self.cfg_a = SystemConfiguration.objects.create(project=self.project_a, num_panels=10)
+
+    def test_list_returns_only_own_configs(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get("/api/configurations/systems/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 0)
+
+    def test_get_other_users_config_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get(f"/api/configurations/systems/{self.cfg_a.id}/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_patch_other_users_config_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.patch(f"/api/configurations/systems/{self.cfg_a.id}/", {"num_panels": 999})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

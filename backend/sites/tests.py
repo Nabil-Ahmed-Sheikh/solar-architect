@@ -89,6 +89,32 @@ class SiteDetailTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
 
+class SiteIsolationTests(APITestCase):
+    """User A cannot see or modify User B's sites."""
+
+    def setUp(self):
+        self.user_a = make_user(username="site_a", email="site_a@example.com")
+        self.user_b = make_user(username="site_b", email="site_b@example.com")
+        self.project_a = make_project(owner=self.user_a)
+        self.site_a = make_site(self.project_a)
+
+    def test_list_returns_only_own_sites(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get("/api/sites/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 0)
+
+    def test_get_other_users_site_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get(f"/api/sites/{self.site_a.id}/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_patch_other_users_site_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.patch(f"/api/sites/{self.site_a.id}/", {"address": "Hijacked"})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
 class AdvanceStepTests(APITestCase):
     def setUp(self):
         self.user = make_user()
@@ -102,6 +128,20 @@ class AdvanceStepTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.site.refresh_from_db()
         self.assertEqual(self.site.current_step, 2)
+
+    def test_advance_step_non_integer_returns_400(self):
+        res = self.client.post(self.url, {"step": "abc"})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", res.data)
+
+    def test_advance_step_out_of_range_returns_400(self):
+        res = self.client.post(self.url, {"step": 9})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", res.data)
+
+    def test_advance_step_zero_returns_400(self):
+        res = self.client.post(self.url, {"step": 0})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_advance_step_unauthenticated(self):
         self.client.force_authenticate(user=None)
@@ -122,6 +162,11 @@ class AddShadeProfileTests(APITestCase):
         res = self.client.post(self.url, profiles, format="json")
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(ShadeProfile.objects.filter(site=self.site).count(), 12)
+
+    def test_add_shade_profile_non_array_returns_400(self):
+        res = self.client.post(self.url, {"month": 1, "shading_factor": 0.2}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", res.data)
 
     def test_add_shade_profiles_replaces_existing(self):
         ShadeProfile.objects.create(site=self.site, month=1, shading_factor=0.9)

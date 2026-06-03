@@ -38,9 +38,9 @@ class EnergyReportViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
-        """Aggregated generation summary across all projects."""
+        """Aggregated generation summary for the current user's projects."""
         from django.db.models import Sum, Avg
-        agg = EnergyReport.objects.aggregate(
+        agg = self.get_queryset().aggregate(
             total_kwh=Sum('total_generation_kwh'),
             total_savings=Sum('savings_usd'),
             total_co2=Sum('co2_avoided_kg'),
