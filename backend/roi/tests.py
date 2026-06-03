@@ -181,3 +181,29 @@ class ROIQuickEstimateTests(APITestCase):
         self.client.force_authenticate(user=None)
         res = self.client.post(self.url, QUICK_ESTIMATE_PAYLOAD)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class ROIIsolationTests(APITestCase):
+    """User A cannot see or modify User B's ROI analyses."""
+
+    def setUp(self):
+        self.user_a = make_user(username="roi_a", email="roi_a@example.com")
+        self.user_b = make_user(username="roi_b", email="roi_b@example.com")
+        self.project_a = make_project(owner=self.user_a)
+        self.analysis_a = make_roi(self.project_a)
+
+    def test_list_returns_only_own_analyses(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get("/api/roi/analyses/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 0)
+
+    def test_get_other_users_analysis_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get(f"/api/roi/analyses/{self.analysis_a.id}/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_recalculate_other_users_analysis_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.post(f"/api/roi/analyses/{self.analysis_a.id}/recalculate/", {}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

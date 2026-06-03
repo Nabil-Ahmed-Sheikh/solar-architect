@@ -153,3 +153,43 @@ class ReportSummaryTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertAlmostEqual(float(res.data["total_kwh"]), 19000.0)
         self.assertAlmostEqual(float(res.data["total_savings"]), 3420.0)
+
+    def test_summary_excludes_other_users_data(self):
+        """Summary must only aggregate the current user's reports."""
+        user_b = User.objects.create_user(username="report_b", email="rb@example.com", password="Pass123!")
+        project_b = make_project(owner=user_b)
+        make_report(self.project, year=2025, total_generation_kwh=5000, savings_usd=900, co2_avoided_kg=2250)
+        make_report(project_b, year=2025, total_generation_kwh=99999, savings_usd=99999, co2_avoided_kg=99999)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertAlmostEqual(float(res.data["total_kwh"]), 5000.0)
+
+
+class ReportIsolationTests(APITestCase):
+    """User A cannot see or modify User B's reports."""
+
+    def setUp(self):
+        self.user_a = make_user(username="rep_a", email="rep_a@example.com")
+        self.user_b = make_user(username="rep_b", email="rep_b@example.com")
+        self.project_a = make_project(owner=self.user_a)
+        self.report_a = make_report(self.project_a, year=2025)
+
+    def test_list_returns_only_own_reports(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get("/api/reports/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 0)
+
+    def test_get_other_users_report_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get(f"/api/reports/{self.report_a.id}/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_add_monthly_data_to_other_users_report_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.post(
+            f"/api/reports/{self.report_a.id}/add_monthly_data/",
+            [{"month": 1, "generation_kwh": 800}],
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

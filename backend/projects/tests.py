@@ -116,6 +116,43 @@ class ProjectStatsTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
+class ProjectIsolationTests(APITestCase):
+    """User A cannot see or modify User B's projects."""
+
+    def setUp(self):
+        self.user_a = make_user(username="owner_a", email="a@example.com")
+        self.user_b = make_user(username="owner_b", email="b@example.com")
+        self.project_a = make_project(owner=self.user_a)
+
+    def test_list_returns_only_own_projects(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get("/api/projects/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 0)
+
+    def test_get_other_users_project_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get(f"/api/projects/{self.project_a.id}/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_patch_other_users_project_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.patch(f"/api/projects/{self.project_a.id}/", {"name": "Hijacked"})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_other_users_project_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.delete(f"/api/projects/{self.project_a.id}/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_stats_only_counts_own_projects(self):
+        make_project(owner=self.user_b, name="B Project", location="Calgary")
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get("/api/projects/stats/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["total_projects"], 1)
+
+
 class GlobalMetricsTests(APITestCase):
     url = "/api/projects/metrics/global/latest/"
 

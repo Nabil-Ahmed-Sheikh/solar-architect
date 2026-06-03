@@ -24,3 +24,12 @@ class SiteAnalysisSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'shade_profiles']
+
+    def validate(self, data):
+        usable = data.get('usable_roof_area', getattr(self.instance, 'usable_roof_area', None))
+        total = data.get('total_roof_area', getattr(self.instance, 'total_roof_area', None))
+        if usable is not None and total is not None and usable > total:
+            raise serializers.ValidationError(
+                {'usable_roof_area': 'Usable roof area cannot exceed total roof area.'}
+            )
+        return data

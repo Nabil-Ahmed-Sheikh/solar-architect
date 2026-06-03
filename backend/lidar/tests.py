@@ -235,3 +235,34 @@ class LiDARGoogleMapsKeyTests(APITestCase):
         self.client.force_authenticate(user=None)
         res = self.client.get(self.url)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class LiDARIsolationTests(APITestCase):
+    """User A cannot see or modify User B's LiDAR scans."""
+
+    def setUp(self):
+        self.user_a = make_user(username="lidar_a", email="lidar_a@example.com")
+        self.user_b = make_user(username="lidar_b", email="lidar_b@example.com")
+        self.project_a = make_project(owner=self.user_a)
+        self.scan_a = make_scan(self.project_a)
+
+    def test_list_returns_only_own_scans(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get("/api/lidar/scans/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 0)
+
+    def test_get_other_users_scan_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get(f"/api/lidar/scans/{self.scan_a.id}/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_reprocess_other_users_scan_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.post(f"/api/lidar/scans/{self.scan_a.id}/reprocess/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_segments_of_other_users_scan_returns_404(self):
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.get(f"/api/lidar/scans/{self.scan_a.id}/segments/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

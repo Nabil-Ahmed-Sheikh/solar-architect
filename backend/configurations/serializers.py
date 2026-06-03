@@ -30,3 +30,20 @@ class SystemConfigurationSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        num_panels = data.get('num_panels', getattr(self.instance, 'num_panels', None))
+        num_strings = data.get('num_strings', getattr(self.instance, 'num_strings', None))
+        panels_per_string = data.get('panels_per_string', getattr(self.instance, 'panels_per_string', None))
+        if (
+            num_panels is not None
+            and num_strings is not None
+            and panels_per_string is not None
+            and num_strings > 0
+            and panels_per_string > 0
+            and num_panels != num_strings * panels_per_string
+        ):
+            raise serializers.ValidationError(
+                {'num_panels': 'num_panels must equal num_strings × panels_per_string.'}
+            )
+        return data
