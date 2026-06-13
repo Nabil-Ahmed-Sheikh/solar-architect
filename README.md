@@ -62,7 +62,7 @@
 
 ## Features
 
-| Feature | Description |
+| Feature | Descriptions |
 |---------|-------------|
 | **Site Analysis Wizard** | 3-step wizard: location → roof geometry → utility economics. Backed by Google Maps satellite view with click-to-pin coordinates. |
 | **LiDAR Pipeline** | Downloads Alberta Open Data `.laz` point clouds, rasterises to DSM, fits roof planes with RANSAC, calculates solar access, and clusters obstacles with DBSCAN. |
